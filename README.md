@@ -850,9 +850,10 @@ A sample of the projects and deployments built on the LibreWXR API:
 | [LocalSky](https://github.com/silenthooligan/localsky) | Hyperlocal weather on your hardware. Smart irrigation when you want it. |
 | [Merry Sky](https://merrysky.net) | A lightweight forecasting website providing an all-in-one hourly summary of the upcoming temperature, precipitations and more. |
 | [Photo-Planner](https://apps.apple.com/de/app/photo-planner/id6764817751) | An app to visualize the field of view for selected cameras and lenses and overlay it onto a map. |
-| [PiClock](https://github.com/n0bel/PiClock) ([updated fork](https://github.com/SerBrynden/PiClock)) | A Fancy Clock built around a monitor and a Raspberry Pi. |
+| [PiClock](https://github.com/n0bel/PiClock) ([PiClock3](https://github.com/n0bel/PiClock3)) | A Fancy Clock built around a monitor and a Raspberry Pi. |
 | [Presura](https://presura.eu) | A multi-language weather viewer for the European Union. |
 | [RidePilot](https://apps.apple.com/us/app/ridepilot-smart-bike-computer/id6790916720) | A cycling tracking app. |
+| [Rueckenwind](https://rueckenwind.piepgras.de) | A cycling navigation app for iOS, built on BRouter and OpenStreetMap. |
 | [Silver Skies (Desktop)](https://github.com/poliberry/silverskies-desktop) | A desktop weather radar, forecast, and severe alert dashboard (Electron + Next.js). |
 | [South Alabama Mesonet](https://mesonet.southalabama.edu) | A network of weather stations monitoring conditions across Southern Alabama. |
 | [StormView Rewrite](https://github.com/arc360alt/StormView-Rewrite) | A rewritten version of stormview to be faster, lighter. |
