@@ -14,9 +14,11 @@ License: data is published under the EUMETNET OPERA data policy
 (open, gratis, anonymous).  See README and ``docs/coverage.md`` for the
 attribution block.
 """
+import asyncio
 import io
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import h5py
@@ -28,6 +30,9 @@ from librewxr.data.retry import retry_get
 from librewxr.sources._helpers import HDF5_LOCK, _dbz_float_to_uint8
 
 logger = logging.getLogger(__name__)
+
+# A dedicated pool bounds memory-heavy parses, including cancelled fetches.
+_PARSE_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="opera-parse")
 
 
 class OperaSource:
@@ -88,7 +93,9 @@ class OperaSource:
                 return None
             try:
                 if resp.status_code == 200:
-                    return _parse_opera_hdf5(resp.content)
+                    return await asyncio.get_running_loop().run_in_executor(
+                        _PARSE_EXECUTOR, _parse_opera_hdf5, resp.content,
+                    )
                 if resp.status_code == 404 and step < self._MAX_FALLBACK_STEPS:
                     continue  # try older slot
                 logger.warning(
