@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Joshua Kimsey
+import asyncio
 import io
-import struct
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import h5py
 import numpy as np
@@ -14,6 +16,7 @@ from librewxr.sources.regional.europe.radar.opera import (
     OperaSource,
     _parse_opera_hdf5,
 )
+from librewxr.sources.regional.europe.radar.opera import source as opera_source
 from librewxr.tiles.coordinates import tile_overlaps_region
 
 
@@ -152,3 +155,83 @@ class TestOperaSourceURL:
         dt = datetime(2026, 4, 10, 9, 7, tzinfo=timezone.utc)
         url = src._url_for_timestamp(int(dt.timestamp()))
         assert "T0905@" in url
+
+
+class TestOperaFetchOffLoop:
+    @staticmethod
+    async def _fake_retry_get(client, url, log_name="OPERA"):
+        class Response:
+            status_code = 200
+            content = b"hdf5 payload"
+
+        return Response()
+
+    async def test_parse_does_not_block_event_loop(self, monkeypatch):
+        started = threading.Event()
+        release = threading.Event()
+
+        def parse(data):
+            started.set()
+            release.wait(timeout=3)
+            return threading.get_ident(), data
+
+        monkeypatch.setattr(opera_source, "retry_get", self._fake_retry_get)
+        monkeypatch.setattr(opera_source, "_parse_opera_hdf5", parse)
+        fetch = asyncio.create_task(OperaSource()._fetch_hdf5(1_700_000_000))
+        try:
+            assert await asyncio.wait_for(asyncio.to_thread(started.wait, 3), 4)
+            assert not fetch.done()
+        finally:
+            release.set()
+
+        result = await fetch
+
+        worker_id, payload = result
+        assert payload == b"hdf5 payload"
+        assert worker_id != threading.get_ident()
+
+    async def test_cancellation_keeps_parse_limit(self, monkeypatch):
+        monkeypatch.setattr(opera_source, "retry_get", self._fake_retry_get)
+        release = threading.Event()
+        lock = threading.Lock()
+        active = started = peak = 0
+
+        def parse(data):
+            nonlocal active, started, peak
+            with lock:
+                active += 1
+                started += 1
+                peak = max(peak, active)
+            try:
+                release.wait(timeout=5)
+                return np.zeros((1, 1), dtype=np.uint8)
+            finally:
+                with lock:
+                    active -= 1
+
+        monkeypatch.setattr(opera_source, "_parse_opera_hdf5", parse)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            monkeypatch.setattr(opera_source, "_PARSE_EXECUTOR", pool)
+            source = OperaSource()
+            tasks = [
+                asyncio.create_task(source._fetch_hdf5(1_700_000_000 + i))
+                for i in range(3)
+            ]
+            try:
+                loop = asyncio.get_running_loop()
+                deadline = loop.time() + 2
+                while started < 2 and loop.time() < deadline:
+                    await asyncio.sleep(0.01)
+                assert started == 2
+
+                tasks[0].cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await tasks[0]
+                await asyncio.sleep(0.05)
+                assert started == 2
+            finally:
+                release.set()
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+        assert started == 3
+        assert peak == 2
