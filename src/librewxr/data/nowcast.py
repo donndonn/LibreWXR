@@ -336,11 +336,16 @@ class NowcastStore:
                 except OSError:
                     pass
 
-            # Convert region arrays to memmaps
+            # Convert region arrays to memmaps.  Full nowcast publishes
+            # can write hundreds of MB (e.g. 6 × USCOMP); run the disk
+            # copy in a worker thread so the event loop stays responsive
+            # — same pattern as FrameStore.add_frame.
             for frame in frames:
                 for name, data in list(frame.regions.items()):
-                    frame.regions[name] = self._to_memmap(
-                        f"frame_{frame.timestamp}_{name}", data
+                    frame.regions[name] = await asyncio.to_thread(
+                        self._to_memmap,
+                        f"frame_{frame.timestamp}_{name}",
+                        data,
                     )
 
             self._frames = {f.timestamp: f for f in frames}
@@ -378,7 +383,9 @@ class NowcastStore:
                     pass
 
             for name, data in list(flows.items()):
-                flows[name] = self._to_memmap(f"flow_{name}", data)
+                flows[name] = await asyncio.to_thread(
+                    self._to_memmap, f"flow_{name}", data,
+                )
             self._flows = flows
             self._flow_version += 1
 
@@ -406,7 +413,9 @@ class NowcastStore:
                     pass
             if flow is None:
                 return
-            self._nwp_flow = self._to_memmap("nwp_flow", flow)
+            self._nwp_flow = await asyncio.to_thread(
+                self._to_memmap, "nwp_flow", flow,
+            )
             self._flow_version += 1
 
     async def get_nwp_flow(self) -> np.ndarray | None:
